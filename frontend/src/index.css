@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SweetNest brand fonts */
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap");
+
+:root {
+    --sn-cream: #f5e6b8;
+    --sn-cream-soft: #faf6ea;
+    --sn-maroon: #5c1a0b;
+    --sn-maroon-dark: #421208;
+    --sn-gold: #d4af37;
+    --sn-border: #e8d8a7;
+    --sn-muted: #8a412a;
+}
+
+body {
+    margin: 0;
+    font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+    background: var(--sn-cream);
+    color: var(--sn-maroon);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif,
+h1,
+h2,
+h3,
+h4 {
+    font-family: "Cormorant Garamond", ui-serif, Georgia, serif;
+}
+
+.grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+            rgba(92, 26, 11, 0.06) 1px,
+            transparent 1px
+        ),
+        radial-gradient(rgba(92, 26, 11, 0.04) 1px, transparent 1px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 2px;
+    mix-blend-mode: multiply;
+    opacity: 0.6;
+}
+
+.btn-primary {
+    background: var(--sn-maroon);
+    color: var(--sn-cream);
+    transition:
+        transform 0.2s ease,
+        background-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+.btn-primary:hover {
+    background: var(--sn-maroon-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px -12px rgba(92, 26, 11, 0.5);
+}
+
+@layer base {
+    :root {
+        --background: 45 63% 84%;
+        --foreground: 14 78% 20%;
+        --card: 48 64% 95%;
+        --card-foreground: 14 78% 20%;
+        --popover: 48 64% 95%;
+        --popover-foreground: 14 78% 20%;
+        --primary: 14 78% 20%;
+        --primary-foreground: 45 63% 84%;
+        --secondary: 48 64% 95%;
+        --secondary-foreground: 14 78% 20%;
+        --muted: 48 40% 90%;
+        --muted-foreground: 14 54% 36%;
+        --accent: 46 65% 52%;
+        --accent-foreground: 14 78% 20%;
+        --destructive: 0 84% 45%;
+        --destructive-foreground: 48 64% 95%;
+        --border: 43 52% 78%;
+        --input: 43 52% 78%;
+        --ring: 14 78% 20%;
+        --radius: 1rem;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+::selection {
+    background: var(--sn-maroon);
+    color: var(--sn-cream);
+}
+
+@keyframes float-slow {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-16px) rotate(4deg);
+    }
+}
+.float-slow {
+    animation: float-slow 7s ease-in-out infinite;
+}

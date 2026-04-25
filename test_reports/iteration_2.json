@@ -1,0 +1,42 @@
+{
+  "summary": "Admin-side frontend flows tested after user enabled Supabase email auth and deduped products. Admin login, products CRUD (add/edit/delete Test Pedha with public-site reflection), review approval + reject + public-site visibility all WORK. Public Products section shows exactly 8 unique items (duplicate fix confirmed). Two NEW blockers found: (1) CRITICAL — Admin dashboard gets stuck at 'Loading…' after any full page reload or direct navigation to /admin (AuthContext loading state never resolves), reproduced 2x. (2) HIGH — Same duplicate-seed issue that affected products also affects reviews: 4 seed reviews duplicated into 8 rows (Ananya R, Rohit K, Priya S each 2x). Orders status-dropdown persistence could NOT be verified because (a) the Orders tab is empty (previous iteration's TestUser order was cleaned) and (b) the reload-stuck bug would block verification anyway.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "supabase.from('reviews')", "issue": "Reviews seed data is duplicated — 4 approved reviews from initial seed (Ananya R, Rohit K, Priya S) appear twice for a total of 8 approved rows (verified via admin Reviews tab: 6 non-AdminReview rows = 3 distinct names x 2). Same non-idempotent-INSERT problem that was fixed for products with /app/supabase_fix.sql; the fix did not cover the reviews table."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard + AuthContext", "issue": "Dashboard stuck at 'Loading…' after full page reload or direct navigation to /admin. AuthContext.loading never flips to false on re-entry, so AdminDashboard renders only the loading spinner. Reproduced across 2 separate test sessions (fresh login → perform actions → page.reload() or page.goto('/admin') → stuck). Blocks admin status-persistence verification and breaks real-world admin UX on refresh.", "selector": "[data-testid=admin-dashboard]", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Admin Orders → status dropdown persistence", "issue": "Could not end-to-end verify that changing status from 'new' → 'confirmed' survives a reload because (a) orders list is empty (prior test order was cleaned up) and (b) reload-stuck bug above blocks verification. The setOrderStatus update call itself executes without error, but the persistence after reload was not provable in this run.", "affected_selectors": ["[data-testid^=order-status-]"]},
+      {"flow": "CartDrawer → WhatsApp Order submit", "issue": "Observation only, not a production bug: during automation, a sonner success toast (from a prior review submit) lingered and intercepted clicks on the WhatsApp order button. In real user flow this is unlikely to occur but worth a note — consider auto-dismissing toasts faster or giving them pointer-events: none after fade."}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL (main agent): Fix AdminDashboard/AuthContext getting stuck on 'Loading…' after reload of /admin. Likely root cause: supabase.auth.getSession() hangs or checkAdmin() throws without catching, leaving loading=true. Add try/catch and a timeout fallback so loading always resolves. Also consider setting loading=false inside onAuthStateChange handler, not only inside getSession.then.",
+    "HIGH (main agent): Dedupe reviews table and add idempotency. Run: DELETE FROM reviews r USING reviews r2 WHERE r.name = r2.name AND r.comment = r2.comment AND r.ctid > r2.ctid; then add a UNIQUE constraint or wrap seed inserts with ON CONFLICT DO NOTHING (similar to the products fix).",
+    "LOW (cleanup after fixes): Test leftover records to clean from this run — 'AdminReview' (approved) and 'AdminReject' (rejected) rows in reviews table. No product or order leftovers (Test Pedha was deleted during CRUD test; no admin-created order since submit step failed).",
+    "After fixing #1, retest the Orders flow end-to-end: create a public order (name=AdminTest phone=9999888877, Kaju Katli 500g) → admin Orders tab should show it → change status to confirmed → reload admin → verify status persists as confirmed."
+  ],
+  "critical_code_review_comments": [
+    "AuthContext.jsx: getSession().then(...) has no .catch; if network or supabase returns a hang, loading is never set to false. Add a .catch that also sets loading=false, and add a safety timeout (e.g., 8s) to force loading=false.",
+    "AuthContext.jsx: checkAdmin() silently swallows errors (no error handling on the user_roles query). If the query errors, isAdmin stays false with no visible warning. Surface errors via toast or set a diagnostic state.",
+    "AdminDashboard.loadAll: runs only on isAdmin change (useEffect [isAdmin]) — switching tabs does not re-fetch. Any new orders/reviews submitted elsewhere require a full reload to appear (and full reload is currently broken). Consider a Refresh button or refetch on tab click.",
+    "AdminDashboard: no confirm prompt before Delete Product. Accidental clicks will hard-delete. Add a window.confirm or a custom modal.",
+    "AdminDashboard: image upload UI is rendered but will error (storage bucket intentionally not created). The Upload button is visually active — either hide the upload label when bucket isn't configured or catch the error with a clearer 'Image uploads are disabled' message.",
+    "supabase seed SQL: still not idempotent for reviews table (same bug class as was fixed for products). Standardize all seed files with ON CONFLICT DO NOTHING + UNIQUE constraints."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "82% — 9/11 requested flows verified; admin-reload and orders-status-persistence blocked"},
+  "test_credentials": "Admin: sweetnestmalkajgiri@gmail.com / naveenadmin@123 — NOW WORKS. Supabase URL: https://fbyijrfvyzjknrlskkyg.supabase.co",
+  "seed_data_creation": "Created 2 public reviews 'AdminReview' (rating 5, approved via admin) and 'AdminReject' (rating 3, rejected via admin). No product or order leftovers — Test Pedha was added, edited (price 400→450), and deleted within the same test.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Confirmed working on admin side: login, products CRUD (add/edit/delete reflect on public site instantly), review approval (approved appears on public #reviews) and rejection (rejected hidden). Public Products count correctly = 8 (no duplicates). OPEN BLOCKERS: (1) Admin dashboard stuck at Loading after page reload / direct /admin navigation — reproduced across two sessions; AuthContext.loading never resolves. (2) Reviews table has 6 seeded rows instead of 3 due to duplicate INSERTs — need same treatment as supabase_fix.sql gave products. UNTESTED due to blocker: order persistence + order-status-dropdown reload persistence; admin signout button click after reload. To retest after fixes: (a) go to /admin fresh, confirm dashboard loads; (b) public site → add Kaju Katli 500g → fill AdminTest/9999888877 → order; (c) open admin Orders tab, change status to confirmed; (d) reload /admin and confirm status persists; (e) click signout and confirm redirect to /admin/login.",
+  "rca of the issue": "Admin reload-stuck bug (#1): On /admin entry without a fresh auth event, AuthContext.jsx runs supabase.auth.getSession().then(async ({data}) => { setSession(...); await checkAdmin(...); setLoading(false); }). If checkAdmin() throws (e.g., network hiccup on user_roles query) or if getSession hangs, the .then chain never reaches setLoading(false), and there is no .catch. AdminDashboard then renders the 'Loading…' div forever. Mitigation: wrap in try/finally so setLoading(false) always runs, add a .catch on the promise, and add a hard timeout fallback. Reviews duplicate bug (#2): supabase_schema.sql INSERTs seed reviews without ON CONFLICT/UNIQUE, so running it twice duplicated the 3 seed rows to 6. supabase_fix.sql deduped products but did not apply the same treatment to reviews. Mitigation: add UNIQUE(name, comment) on reviews or dedupe query + ON CONFLICT DO NOTHING on future seeds."
+}

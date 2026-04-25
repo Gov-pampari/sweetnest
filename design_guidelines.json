@@ -1,0 +1,112 @@
+{
+  "theme": "light",
+  "archetype": "1 (Organic & Earthy / Warm & Sensory)",
+  "brand_identity": {
+    "name": "SweetNest",
+    "tagline": "The Taste Of Tradition",
+    "vibe": "Warm, premium, traditional sweets brand; Minimal + elegant UI; Soft shadows + rounded cards; 3D with motion graphics"
+  },
+  "colors": {
+    "primary": "#5C1A0B",
+    "primary_hover": "#421208",
+    "background": "#F5E6B8",
+    "surface": "#FAF6EA",
+    "accent": "#D4AF37",
+    "text": {
+      "main": "#5C1A0B",
+      "muted": "#8A412A",
+      "inverse": "#F5E6B8"
+    },
+    "border": "#E8D8A7"
+  },
+  "typography": {
+    "headings": {
+      "font": "Cormorant Garamond",
+      "classes": "font-serif tracking-tight"
+    },
+    "body": {
+      "font": "Outfit",
+      "classes": "font-sans leading-relaxed"
+    },
+    "sizes": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl",
+      "h3": "text-xl sm:text-2xl",
+      "h4": "text-lg sm:text-xl",
+      "p": "text-base",
+      "small": "text-sm"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "p-4, p-6, p-8, p-12, p-16, p-24, p-32",
+    "radius": "rounded-2xl",
+    "container_padding": "px-4 md:px-8 lg:px-12",
+    "product_grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8",
+    "admin_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
+  },
+  "motion_and_3d": {
+    "hero_directives": "Implement a 2.5D parallax hero section using Framer Motion. The brand logo should be centered. Create 'floating' sweets around the logo using layered images with subtle slow translations (e.g. y: [0, -15, 0], duration: 4-6s, repeat: Infinity, ease: 'easeInOut'). Add slight mouse-movement tracking for the parallax effect.",
+    "hover_states": "Product cards must slightly lift (-translate-y-1) and increase shadow (shadow-xl) on hover. Images within cards should subtle scale (scale-105).",
+    "page_transitions": "Staggered fade-up for grid items (initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { staggerChildren: 0.1 })."
+  },
+  "components": {
+    "navbar": "Glassmorphism effect over the cream background (backdrop-blur-xl bg-[#F5E6B8]/80). Logo top-left. Desktop nav links and Cart icon on right. Sticky top.",
+    "hero_section": "Centered layout. Large logo. Floating sweets scattered in the background. Tagline in Cormorant Garamond below the logo.",
+    "product_card": "Solid surface (#FAF6EA), rounded-2xl, soft shadow-md. Image container 16:9 or 1:1 ratio. Title (h3, serif), Price (sans, bold). Weight selector (250g, 500g, 1kg) as segmented pill buttons. 'Add to Cart' solid primary button (#5C1A0B bg, #F5E6B8 text).",
+    "cart_drawer": "Slide-over from right. Solid #FAF6EA background. List of items with quantity controls (+/-). Total summary. Massive 'Order via WhatsApp' CTA button (bg-[#5C1A0B] or WhatsApp green depending on contrast preference, but keep within brand).",
+    "admin_dashboard": "Clean, dense 'Control Room' layout. Use #F5E6B8 as base, #FAF6EA for cards. Sidebar navigation. Tables for orders and products."
+  },
+  "media": {
+    "logos": {
+      "main": "https://customer-assets.emergentagent.com/job_d900ca27-18dc-4d29-be23-8d2921c7d259/artifacts/8qzlth55_ChatGPT%20Image%20Apr%2018%2C%202026%2C%2011_39_09%20AM.png",
+      "favicon": "https://customer-assets.emergentagent.com/job_d900ca27-18dc-4d29-be23-8d2921c7d259/artifacts/8qzlth55_ChatGPT%20Image%20Apr%2018%2C%202026%2C%2011_39_09%20AM.png"
+    },
+    "hero": {
+      "background_plate": "https://images.pexels.com/photos/9672994/pexels-photo-9672994.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080&w=1920",
+      "floating_elements_source": "https://images.pexels.com/photos/11484120/pexels-photo-11484120.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    },
+    "products": [
+      {
+        "name": "Kaju Katli",
+        "url": "https://images.pexels.com/photos/10514163/pexels-photo-10514163.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Gulab Jamun",
+        "url": "https://images.pexels.com/photos/15014918/pexels-photo-15014918.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Rasgulla",
+        "url": "https://images.pexels.com/photos/36460898/pexels-photo-36460898.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Motichoor Ladoo",
+        "url": "https://images.pexels.com/photos/28437003/pexels-photo-28437003.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Barfi",
+        "url": "https://images.pexels.com/photos/7182054/pexels-photo-7182054.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Soan Papdi",
+        "url": "https://images.pexels.com/photos/14723140/pexels-photo-14723140.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Jalebi",
+        "url": "https://images.pexels.com/photos/36551398/pexels-photo-36551398.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "name": "Mysore Pak",
+        "url": "https://images.pexels.com/photos/5864767/pexels-photo-5864767.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the brand palette (#F5E6B8 for backgrounds, #5C1A0B for text/CTAs). Do not introduce purple or teal.",
+    "Use Cormorant Garamond for headings and Outfit for body text.",
+    "Implement the 3D parallax hero using Framer Motion. Center the provided logo. Do NOT redesign or alter the logo.",
+    "Implement the Cart drawer with quantity controls and a 'Order via WhatsApp' CTA. No payment gateway integration is required.",
+    "Add 'data-testid' attributes to all interactive elements for testing.",
+    "Use Shadcn UI for the Admin dashboard, modifying the classes to fit the brand theme.",
+    "Ensure images are wrapped appropriately so they look premium and are responsive (object-cover)."
+  ]
+}

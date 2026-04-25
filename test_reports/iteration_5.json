@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only regression after AuthContext.jsx deadlock fix (supabase-js v2 onAuthStateChange listener now sync-only; resolveIsAdmin moved to separate useEffect keyed on session.user.id; loading derived from session===undefined||!adminChecked). ALL 7 TARGETED FLOWS PASS. Login lands on dashboard in ~1.3s. 5 consecutive reloads of /admin all render the dashboard in ~1.0s each (no 'Loading…' hang, no 'Access denied'). Direct /admin in a new tab while signed in loads in ~1.2s. Public-site cart checkout (Kaju Katli 500g, AdminTest4/9998887777, WhatsApp order) successfully persisted an order (id e61fa2cf-4171-4f06-8cee-de76fd0d99ad) into Supabase; WhatsApp popup opened with the expected wa.me URL containing the product. In the admin Orders tab the AdminTest4 order was visible, initial status='new', set to 'confirmed', and after a full page reload the status dropdown still reads 'confirmed' (persisted to Supabase). Sign-out from the header button cleared session and redirected to /admin/login. After sign-out, visiting /admin directly redirects back to /admin/login (no dashboard flash, no stale render). The iteration_4 deadlock regression is fully resolved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CLEANUP: Delete the AdminTest4 order from Supabase to keep the DB clean. SQL: DELETE FROM orders WHERE id = 'e61fa2cf-4171-4f06-8cee-de76fd0d99ad'; (matches customer_name='AdminTest4', customer_phone='9998887777'). This is the only test-created row left behind.",
+    "Optional polish (non-blocking): The 'Loading…' screen in AdminDashboard.jsx still has no watchdog/fallback UI. Current loading now always resolves in ~1s, so the risk is low, but a 5-second timeout showing 'Having trouble? Reload' would harden against any future auth-transport regressions without masking bugs."
+  ],
+  "critical_code_review_comments": [
+    "AuthContext.jsx is now implemented correctly per Supabase's documented guidance (issue #741): the onAuthStateChange listener only does setSession(s) synchronously, and resolveIsAdmin runs in a separate useEffect keyed on session?.user?.id. The derived `loading = session === undefined || !adminChecked` cleanly represents both phases. The 400ms single retry in resolveIsAdmin is a sensible JWT-hydration race guard.",
+    "Minor: no diagnostic logs remain for the auth flow. Consider keeping a single console.info on session resolution + adminChecked transition behind a debug flag to ease any future regression triage.",
+    "AdminDashboard.jsx: the 'Loading…' bare screen remains. Not critical now that loading resolves, but adding a watchdog message if loading>5s would be cheap insurance."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only testing)",
+    "frontend": "7/7 — Flow 1 Login PASS (1.33s), Flow 2 5x reload PASS (avg ~1.03s each, all 5/5), Flow 3 Direct /admin new tab PASS (1.16s), Flow 4 Public order creation PASS (order id e61fa2cf persisted), Flow 5 Order status change + reload-persistence PASS (status 'confirmed' survived reload), Flow 6 Sign-out redirect PASS, Flow 7 Post-signout /admin guard PASS"
+  },
+  "test_credentials": "Admin: sweetnestmalkajgiri@gmail.com / naveenadmin@123 (verified working). Supabase URL: https://fbyijrfvyzjknrlskkyg.supabase.co.",
+  "seed_data_creation": "Created 1 order row in Supabase `orders` table for testing: customer_name='AdminTest4', customer_phone='9998887777', item='Kaju Katli 500g ₹650', id='e61fa2cf-4171-4f06-8cee-de76fd0d99ad', final status='confirmed'. Needs SQL cleanup by main agent.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration_5 closes out the supabase-js v2 deadlock investigation. AuthContext.jsx fix (sync-only onAuthStateChange + separate useEffect for admin role lookup) works as documented. All 7 admin-flow regressions pass. Only remaining action item is SQL cleanup of the seeded AdminTest4 order (id e61fa2cf-4171-4f06-8cee-de76fd0d99ad). If asked to retest, focus on no new areas — core auth+reload+order+signout suite is green. Selectors to reuse: [data-testid=admin-dashboard], [data-testid=tab-orders|products|reviews], [data-testid=order-<id>], [data-testid=order-status-<id>], [data-testid=admin-signout-btn], [data-testid=open-cart-btn], [data-testid=cart-drawer], [data-testid=cart-name-input], [data-testid=cart-phone-input], [data-testid=whatsapp-order-btn].",
+  "rca of the issue": "Previous iteration (iteration_4) had supabase-js v2 onAuthStateChange deadlock — awaiting supabase.from('user_roles') inside the listener callback held the internal auth lock, blocking the PostgREST fetch that tries to attach the JWT (also via that lock). Fix validated in this iteration: listener now ONLY does setSession synchronously; role lookup runs in a distinct useEffect keyed on session.user.id, which executes after the listener returns and the lock is released. Behavior verified end-to-end: fresh reload completes in ~1s with a successful REST call to /rest/v1/user_roles, loading state flips correctly (session→adminChecked), no stuck 'Loading…' across 5 consecutive reloads. No reproduction of the bug in this iteration."
+}

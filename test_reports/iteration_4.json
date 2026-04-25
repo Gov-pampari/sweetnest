@@ -1,0 +1,75 @@
+{
+  "summary": "Frontend-only regression focused on admin reload persistence after the 2nd AuthContext rewrite. Login at /admin/login WORKS and lands on the dashboard. HOWEVER, the CRITICAL admin-reload bug is NOT fixed — it has regressed back to iteration_2's 'stuck Loading…' symptom. On /admin reload (and on opening /admin in a new tab while signed in), the page shows 'Loading…' indefinitely (observed 30+ seconds with no resolution), and no REST request to user_roles is ever sent. localStorage still holds the session token. All downstream flows (5x reload persistence, new-tab direct /admin, order-status-persistence-after-reload, sign-out → /admin/login redirect, post-signout /admin guard) are BLOCKED by this root cause and could NOT be verified. Public-site order creation (AdminTest3) was also blocked — did not create a new order this iteration. Root cause: supabase-js v2 deadlock when awaiting supabase.from('user_roles')…maybeSingle() directly inside the onAuthStateChange callback — the auth lock held by the listener blocks PostgREST's attempt to read the session.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AuthContext.jsx (inside onAuthStateChange listener)",
+        "issue": "On /admin reload the dashboard is stuck at 'Loading…' indefinitely (verified 30+ seconds, 5/5 reload attempts). localStorage shows the session key 'sb-fbyijrfvyzjknrlskkyg-auth-token' is present, but NO network request to /rest/v1/user_roles is ever dispatched after reload (0 REQ-FAIL/REQ-SUCCESS observed for that endpoint post-reload; only pre-reload aborts for orders/products/reviews are seen). This means resolveIsAdmin() never completes, so the finally{ setLoading(false) } block never runs. This is the well-known supabase-js v2 deadlock: when you `await supabase.from(...)` DIRECTLY inside the onAuthStateChange callback, the callback holds an internal auth lock; the PostgREST fetch tries to acquire the same lock (to read the current session) and blocks forever. See supabase/supabase-js issue #741 and the documented remedy: never await db calls inline — defer with setTimeout(fn, 0) (or queueMicrotask / a dedicated useEffect that watches session state) so the auth callback returns before the query starts.",
+        "selector": "[data-testid=admin-dashboard]",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "AdminDashboard.jsx",
+        "issue": "Because AdminDashboard renders only 'Loading…' while loading=true, and the safety timer was removed in this rewrite, there is now no fallback UI or error state at all — users stare at an empty 'Loading…' screen indefinitely when the auth listener deadlocks. Consider a minimal watchdog (e.g., if loading stays true >5s, show a 'Having trouble — reload' link) that doesn't flip to 'Access denied' prematurely.",
+        "selector": "min-h-screen Loading…",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin reload persistence (5 reloads in a row)",
+        "issue": "0/5 reloads rendered the dashboard. All 5 were stuck on 'Loading…' at the 8s timeout. Extended single-reload probe waited 30s — still 'Loading…'. Expected per PRD: each reload lands on dashboard within ~2s.",
+        "affected_selectors": ["[data-testid=admin-dashboard]"]
+      },
+      {
+        "flow": "Direct /admin in new tab while signed in",
+        "issue": "New tab navigating to /admin also stuck at 'Loading…' — same root cause (same AuthProvider deadlock on mount).",
+        "affected_selectors": ["[data-testid=admin-dashboard]"]
+      },
+      {
+        "flow": "Order status persistence after reload",
+        "issue": "BLOCKED — cannot reach admin dashboard after reload to verify the dropdown value persists.",
+        "affected_selectors": ["[data-testid^=order-status-]"]
+      },
+      {
+        "flow": "Admin sign-out → /admin/login redirect",
+        "issue": "BLOCKED — could not reach dashboard after reload to click Sign out. (Sign-out immediately after login was not re-tested per instructions to focus on the reload trio.)",
+        "affected_selectors": ["[data-testid=admin-signout-btn]"]
+      },
+      {
+        "flow": "Post-signout /admin guard",
+        "issue": "BLOCKED — dependent on sign-out flow above.",
+        "affected_selectors": []
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL (main agent): Fix the supabase-js v2 deadlock in /app/frontend/src/context/AuthContext.jsx. Do NOT `await supabase.from('user_roles')…` directly inside the onAuthStateChange callback. Recommended patterns: (a) setSession(s) inside the listener and setLoading(false) to ACK the listener fired, then run resolveIsAdmin in a SEPARATE useEffect that watches `session?.user?.id`; OR (b) wrap the admin lookup in `setTimeout(async () => { … setIsAdmin(admin); setLoading(false); }, 0)` so the listener returns before PostgREST fires, releasing the auth lock. Reference: https://github.com/supabase/supabase-js/issues/741 and https://supabase.com/docs/reference/javascript/auth-onauthstatechange (the docs explicitly warn against awaiting async calls inside the callback).",
+    "HIGH (main agent): After the deadlock fix, re-verify: (1) 5x reload on /admin all land on dashboard within ~2s, (2) /admin in a fresh tab loads, (3) AdminTest3 order status persists as 'confirmed' after reload, (4) Sign-out redirects to /admin/login, (5) Visiting /admin after sign-out redirects back to /admin/login.",
+    "HIGH: Consider keeping a very-low-frequency watchdog (e.g., warn-only, NOT a setLoading(false) force) to surface this kind of deadlock as an error UI rather than an infinite spinner.",
+    "NOTE: No new test order was created this iteration — the previously leftover AdminTest3 order (from an earlier attempt or iteration) is NOT in DB because we never got past reload. iteration_3's AdminTest2 was already SQL-cleaned per the handoff note."
+  ],
+  "critical_code_review_comments": [
+    "AuthContext.jsx line 41–54: awaiting `resolveIsAdmin` (which awaits `supabase.from('user_roles').…maybeSingle()`) INSIDE the onAuthStateChange callback is the anti-pattern. The listener must return synchronously (or very quickly) — any DB work should be scheduled outside the callback (setTimeout 0 / separate useEffect keyed on session). This is the single root cause of the stuck-loading regression.",
+    "AuthContext.jsx: There is no diagnostic logging for the auth listener firing or resolveIsAdmin starting/finishing. Add minimal console.info tracers while debugging so you can confirm the listener fires on reload and see exactly where it hangs.",
+    "AdminDashboard.jsx line 66: 'Loading…' with zero styling/state beyond text. With no safety timer and no watchdog, a single upstream bug causes a permanent blank screen — add either a 5s-after fallback UI (NOT a forced isAdmin=false) or surface an explicit 'Could not load session' error.",
+    "AuthContext.jsx resolveIsAdmin(): the single 450ms retry is fine IN PRINCIPLE, but it is moot as long as the first query never actually leaves the client due to the deadlock. Keep the retry after fixing the deadlock."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only)",
+    "frontend": "1/7 — login lands on dashboard (PASS). 5x reload persistence FAIL (0/5). Direct /admin in new tab FAIL. Order creation for AdminTest3 BLOCKED. Order-status reload-persistence BLOCKED. Sign-out redirect BLOCKED. Post-signout /admin guard BLOCKED."
+  },
+  "test_credentials": "Admin: sweetnestmalkajgiri@gmail.com / naveenadmin@123 (verified working). Supabase URL: https://fbyijrfvyzjknrlskkyg.supabase.co. Key sb-fbyijrfvyzjknrlskkyg-auth-token is persisted in localStorage after login.",
+  "seed_data_creation": "None this iteration — did not reach order creation because all reload attempts failed first and the focus was the reload trio.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Iteration_4 result: AuthContext.jsx rewrite to drive state from onAuthStateChange's INITIAL_SESSION event DID NOT fix the reload bug. It regressed to iteration_2's infinite-Loading symptom because `await supabase.from(...)` is called directly inside the auth listener, which deadlocks per supabase-js v2 known issue #741. Confirmed by: (a) 30s wait on reload still showed 'Loading…', (b) 0 network requests to /rest/v1/user_roles dispatched post-reload, (c) session token still present in localStorage. The single-line fix is to move resolveIsAdmin out of the onAuthStateChange callback (setTimeout(fn,0) or a separate useEffect keyed on session.user.id). To retest after fix: login → reload 5x → verify dashboard each time → open /admin in fresh tab → create AdminTest4 order (cart testids unchanged: cart-name-input, cart-phone-input, whatsapp-order-btn, open-cart-btn) → set order status to confirmed → reload → verify status persists → sign out → verify /admin/login redirect and /admin guard.",
+  "rca of the issue": "Supabase-js v2 onAuthStateChange deadlock. The listener acquires an internal auth lock (Navigator LockManager in v2). While that lock is held, any call to `supabase.from(...).select(...)` asynchronously tries to acquire the same lock (to attach the current JWT to the outgoing request). Because the listener's Promise is still pending (awaiting the DB call), the lock is never released, so the DB call never gets to send its HTTP request — infinite deadlock. Evidence from this test: post-reload, zero fetches to user_roles are ever observed in the network panel (not even a queued/failed one), and the Loading screen never resolves even after 30s. Mitigation: `onAuthStateChange(async (_event, s) => { setSession(s); setTimeout(async () => { const admin = s?.user?.id ? await resolveIsAdmin(s.user.id) : false; setIsAdmin(admin); setLoading(false); }, 0); })` — or move the resolveIsAdmin into a separate useEffect that depends on session?.user?.id and sets loading=false when it returns. References: https://github.com/supabase/supabase-js/issues/741 ; Supabase docs explicitly warn 'Do not await other Supabase calls inside the callback'."
+}

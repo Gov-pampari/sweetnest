@@ -1,0 +1,53 @@
+{
+  "summary": "Final regression test after iteration_2 fixes. REVIEWS dedupe and PRODUCTS count are CONFIRMED FIXED (3 unique approved reviews: Ananya R., Rohit K., Priya S.; 8 unique products). Order submission flow works (AdminTest2 order saved to Supabase, visible in admin UI). HOWEVER, the CRITICAL iteration_2 bug (admin dashboard reload) is NOT fully fixed. New symptom: on reload of /admin, screen shows 'Loading…' for the full 6s safety window, then flips to 'Access denied — This account does not have admin role' instead of re-rendering the dashboard. Reproduced 4/5 reloads across two sessions. The fix in AuthContext.jsx swapped one bug for another (stuck-loading → false access-denied). Because of this, order-status-dropdown persistence and the admin sign-out button could NOT be fully verified end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AuthContext.jsx + AdminDashboard.jsx",
+        "issue": "On page reload of /admin while signed in as admin: screen shows 'Loading…' for exactly the 6s safety-timer window, then flips to 'Access denied — This account does not have admin role' with a Sign out button. The session IS restored (AdminDashboard does not redirect to /admin/login, so session !== null) but isAdmin resolves to false. Root cause: the checkAdmin() query against user_roles runs before supabase-js has attached the restored access_token to REST requests (or the user_roles RLS policy rejects the call), so .maybeSingle() returns {data: null} and setIsAdmin(false) fires. The safety timer at 6s also races: it calls setLoading(false) while checkAdmin() has either not finished or has already returned a false-negative, forcing the dashboard to render the 'Access denied' branch. Only the very first reload immediately after fresh login sometimes succeeds (1/5 attempts).",
+        "selector": "[data-testid=admin-dashboard]",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin Orders → status dropdown persistence",
+        "issue": "Setting status from 'new' → 'confirmed' on the AdminTest2 order executes without error (select_option fires setOrderStatus), but verifying persistence after page.reload() is impossible because the reload lands on 'Access denied' (see CRITICAL bug above). Supabase REST cannot verify from anon key because orders table has RLS.",
+        "affected_selectors": ["[data-testid^=order-status-]", "[data-testid=admin-dashboard]"]
+      },
+      {
+        "flow": "Admin sign-out button",
+        "issue": "Click on [data-testid=admin-signout-btn] did not reliably redirect to /admin/login within 10s in automation (URL did not change; dashboard remained). Could not confirm whether this is a real bug or a by-product of the broken reload/access-denied state. Needs retest after the reload bug is fixed."
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL (main agent): Fix AuthContext.jsx so admin reload actually works. Replace the current getSession-then-checkAdmin flow with one that (a) awaits supabase.auth.getSession() AND the user_roles query together, (b) only sets isAdmin AFTER a successful response (retry once on empty result to guard against token-race), and (c) does NOT let the 6s safety timer force setLoading(false) while checkAdmin is still inflight. A cleaner fix: drive the entire auth state from onAuthStateChange (which is called with INITIAL_SESSION on mount) instead of getSession(), and inside that listener await checkAdmin() before setLoading(false). Also verify the user_roles RLS policy allows 'authenticated' users to SELECT their own row.",
+    "HIGH: Retest order-status-dropdown reload persistence and the admin sign-out → /admin/login redirect once the reload bug is fixed.",
+    "CLEANUP: Delete the leftover test order created by this run: customer_name='AdminTest2', customer_phone='9999777766', order id cdc627da-b9a7-47d2-98a1-d7ff4e6211e6. Could not be cleaned up from the test because (a) admin UI has no order-delete button and (b) orders RLS blocks anon REST delete.",
+    "NICE-TO-HAVE: Suppress/hide the brief 'Access denied' flash when auth is still resolving — e.g., keep loading=true until checkAdmin has definitively returned (not just any timeout) OR gate the AccessDenied branch on 'isAdmin===false AND checkAdmin has completed at least once'."
+  ],
+  "critical_code_review_comments": [
+    "AuthContext.jsx: The 6s safety timer is a band-aid, not a fix. It forces setLoading(false) even if checkAdmin() has not produced a definitive result, which is exactly what causes the false 'Access denied' flash on reload. Replace with an auth-listener-driven flow and a bounded retry on checkAdmin.",
+    "AuthContext.jsx checkAdmin(): .maybeSingle() treats both 'no row' and 'error' as isAdmin=false. On a reload where the JWT has not yet been attached to the REST client, this silently produces a false negative. At minimum, retry once on null/empty result after a short delay before committing isAdmin=false.",
+    "AdminDashboard.jsx: Rendering <Navigate to='/admin/login'> when !session and rendering 'Access denied' when session && !isAdmin means any transient false isAdmin will show the scary 'Access denied' screen. Consider a short grace period (e.g., keep showing Loading… until both session AND the first checkAdmin RPC have definitively completed).",
+    "AdminDashboard.loadAll runs only on isAdmin change; switching tabs does not refresh data. Low priority but users who leave the tab open will see stale orders/reviews."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only)",
+    "frontend": "5/8 flows fully verified — reviews-dedupe, products-count, admin-login, order-submission, and first-reload-success all PASS; direct-/admin-navigation, order-status-persistence, and sign-out all BLOCKED or partially verified by the CRITICAL reload bug"
+  },
+  "test_credentials": "Admin: sweetnestmalkajgiri@gmail.com / naveenadmin@123 (verified working). Supabase URL: https://fbyijrfvyzjknrlskkyg.supabase.co. Anon key: sb_publishable_SWJsq8x55hisNXfz1mbfZg_QxqABX7u",
+  "seed_data_creation": "Created 1 order via public flow: customer_name='AdminTest2' customer_phone='9999777766' item=Kaju Katli 500g. ID=cdc627da-b9a7-47d2-98a1-d7ff4e6211e6. Status was changed to 'confirmed' in admin UI but persistence could not be verified. This order MUST be cleaned up by main agent (DELETE FROM orders WHERE customer_name='AdminTest2').",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Iteration_3 results: (1) Supabase data is now correct — reviews=3 unique, products=8 unique, no AdminReview/AdminReject leftovers. Confirmed via direct REST call to Supabase. (2) AuthContext.jsx reload bug was SWAPPED, not fixed. Old symptom = permanent Loading. New symptom = 6s Loading then 'Access denied'. Reproduced 4/5 reloads; only the first reload after fresh login sometimes succeeds. (3) Order submit works (cart testids: cart-name-input, cart-phone-input, whatsapp-order-btn, open-cart-btn, cart-drawer). (4) Leftover: AdminTest2 order (id cdc627da-b9a7-47d2-98a1-d7ff4e6211e6) needs SQL cleanup. To retest after main agent fix: fresh login → reload 5x in a row → each should land on dashboard with tabs visible → Orders tab → AdminTest2 order status should still read 'confirmed' → click Sign out → must redirect to /admin/login.",
+  "rca of the issue": "On /admin reload, AuthContext.jsx runs: (a) await supabase.auth.getSession() → returns restored session from localStorage, (b) await checkAdmin(userId) → queries user_roles.select().eq('user_id', userId).maybeSingle(). Step (b) consistently returns {data: null, error: null} on reload, even though the same user is an admin and the query succeeds immediately after a fresh signIn. Most likely cause is a timing race: the REST request in checkAdmin is dispatched before supabase-js has finished hydrating the restored JWT into its global fetch headers, so the call is treated as anon and RLS on user_roles hides the row (resulting in null, not a 401, because .maybeSingle suppresses 'no rows'). The 6s safety timer then fires setLoading(false) regardless of checkAdmin status, so AdminDashboard renders the isAdmin===false branch (Access denied). MITIGATION OPTIONS: (1) In AuthContext, subscribe ONLY through onAuthStateChange (INITIAL_SESSION event) and await checkAdmin there — do not call getSession in parallel; (2) In checkAdmin, if data is null and no error, retry once after ~500ms before committing setIsAdmin(false); (3) In AdminDashboard, treat isAdmin===false as 'still loading' until the auth listener has fired at least once with a confirmed result — a new boolean like authResolved in AuthContext."
+}

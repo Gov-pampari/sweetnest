@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend e2e testing of SweetNest. Home/Hero/Products/Category filter/Weight selector/Add-to-cart/Cart qty/WhatsApp order/Gift Box builder/Review submit/Contact & Footer address/Google Maps iframe/Admin login page (sign-up removed) all verified. Two blockers: (1) products table has duplicate seed data (16 rows instead of 8), (2) Admin login fails with 422 - admin auth user does not exist in Supabase (sign-up UI was removed, so no path to create it from the app). Admin dashboard (orders, product CRUD, review approval) could NOT be tested due to login failure.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "supabase auth /token?grant_type=password", "issue": "Admin login returns 422 Invalid credentials for sweetnestmalkajgiri@gmail.com / naveenadmin@123. The auth.users row for this admin does not exist in Supabase. Sign-up was intentionally removed from /admin/login, but no SQL-level user insert was performed. Admin dashboard (orders + products CRUD + review approval) is completely inaccessible.", "priority": "CRITICAL"},
+      {"endpoint": "supabase.from('products')", "issue": "Products table has duplicate seed data: 16 rows returned instead of 8. Each of the 8 signature sweets appears twice (Kaju Katli, Gulab Jamun, Rasgulla, Motichoor Ladoo, Milk Barfi, Soan Papdi, Jalebi, Mysore Pak x2). Seed SQL is not idempotent. Confirmed via REST: GET /rest/v1/products?is_active=eq.true returns 16.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin login → Dashboard", "issue": "Cannot reach admin dashboard. Supabase auth returns 422; no `not-admin-warning` shown because session never establishes. Root cause is missing auth.users row (see backend_issues).", "affected_selectors": ["[data-testid=admin-submit-btn]", "[data-testid=not-admin-warning]"]},
+      {"flow": "Gift Box Builder WhatsApp share", "issue": "Works functionally (wa.me URL opens with correct number + order lines). Minor note: the message uses raw spaces like 'Gift Box' instead of fully URL-encoding (only %0A newlines are encoded). Browser auto-encodes so wa.me still works, but encoding is inconsistent with cart flow which uses encodeURIComponent on name/phone but not on the lines. Not a bug, just a quality note."}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Create admin auth user. Option A: Run SQL in Supabase SQL Editor — use supabase.auth.admin or insert into auth.users with hashed password then INSERT INTO user_roles (user_id, role) VALUES ((select id from auth.users where email='sweetnestmalkajgiri@gmail.com'), 'admin'). Option B: Temporarily re-add Sign-Up button on /admin/login, sign up the admin email (the trigger mentioned in schema should grant admin role), then remove the button again. Option C: In Supabase Dashboard → Authentication → Users → Add user manually, then insert into user_roles.",
+    "HIGH: Clean up duplicate product rows. Easiest fix: run SQL `DELETE FROM products p USING products p2 WHERE p.name = p2.name AND p.ctid > p2.ctid;` OR DELETE all and re-insert once with `ON CONFLICT (name) DO NOTHING`. Then make the seed INSERTs idempotent (add UNIQUE constraint on name or use ON CONFLICT).",
+    "After admin user fixed, retest admin dashboard: Orders tab status dropdown persistence, Products tab add/edit/delete (with image URL only — no storage bucket yet), Reviews approval flow (TEST_Reviewer pending review from this run can be approved)."
+  ],
+  "critical_code_review_comments": [
+    "AdminLogin.jsx: After successful signIn, there is no automatic redirect when isAdmin becomes true in the same tick as session. The useEffect does redirect, but if role check is slow, user sees the 'not admin' warning briefly. Consider disabling warning while role lookup in progress.",
+    "CartDrawer.submitOrder: wa.me URL construction mixes raw text with manually encoded %0A newlines and encodeURIComponent() only on name/phone. Inconsistent. Use encodeURIComponent on the whole message body for safety.",
+    "GiftBoxBuilder.addToCart: uses `price: total` (already-discounted) with weight '500g' (multiplier 1) — relies on ProductCard's weight math not being applied here. Fragile if cart logic changes. Consider a dedicated bundle line-item type.",
+    "supabase_schema.sql is not idempotent — re-running duplicates seed data as seen here. Add ON CONFLICT clauses or guards.",
+    "test_credentials.md instructs to sign up via /admin/login to create admin — but sign-up button was removed from AdminLogin.jsx. The docs and UI are now inconsistent; update credentials.md with the new setup path."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "50%", "frontend": "85%"},
+  "test_credentials": "Admin: sweetnestmalkajgiri@gmail.com / naveenadmin@123 — AUTH USER DOES NOT EXIST. Supabase URL: https://fbyijrfvyzjknrlskkyg.supabase.co",
+  "seed_data_creation": "Created TEST_Reviewer pending review with rating 4 and comment 'TEST_comment - amazing sweets!' via public form. Also inserted 1 test order (customer_name=TestUser, phone=9999999999, single Kaju Katli 500g) into orders table via WhatsApp order flow. These should be cleaned up after admin access is restored.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Public-site flows (Hero, Products render, category filter, weight selector 250g=0.55x 500g=1x 1kg=1.9x rounded, add-to-cart, cart qty +/- and total, WhatsApp order with wa.me/919533726951 URL, cart clear after order, Gift Box 4-6 selection + 10% discount + max-6 toast + WhatsApp share, Review submit with status=pending, Contact address 'Malkajgiri X Road Hyderabad 500047', Google Maps iframe, Footer, sign-up removed from /admin/login) ALL PASS. Still pending: admin dashboard testing (orders list + status dropdown, products CRUD with image URL paste, review approval/rejection, verifying approved review appears on public #reviews, verifying added product appears on home). Blocked on admin user creation. Also verify duplicate products fix reduces count back to 8. TEST_Reviewer pending review and one TestUser order are awaiting in DB.",
+  "rca of the issue": "Admin login 422: Root cause is that the admin auth.users row was never created. The /app/memory/test_credentials.md says to sign up via the app, but /admin/login no longer has a sign-up button (per latest product requirement). Supabase REST confirms the email is not registered. Reproduction: POST to https://fbyijrfvyzjknrlskkyg.supabase.co/auth/v1/token?grant_type=password with the admin creds returns 422 invalid_grant. Mitigation: Create the user via Supabase Dashboard or SQL, then insert user_roles row. Duplicate products: /app/supabase_schema.sql INSERTs seed without ON CONFLICT, so running it twice duplicated all 8 rows."
+}
