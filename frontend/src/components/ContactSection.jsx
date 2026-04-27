@@ -7,6 +7,7 @@ export const ContactSection = () => {
   const address =
     "1-1-27, beside R9000, Malkajgiri X Road, Hyderabad, Telangana 500047, India";
   const phoneDisplay = "+91 95337 26951";
+
   const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(
     address
   )}&output=embed`;

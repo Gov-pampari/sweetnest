@@ -23,11 +23,11 @@ export const Footer = () => {
         <div>
           <h4 className="font-serif text-2xl mb-3">Explore</h4>
           <ul className="space-y-2 text-sm text-[#F5E6B8]/80">
-            <li><a href="#hero" className="hover:text-[#D4AF37]">Home</a></li>
-            <li><a href="#products" className="hover:text-[#D4AF37]">Sweets</a></li>
-            <li><a href="#reviews" className="hover:text-[#D4AF37]">Reviews</a></li>
-            <li><a href="#contact" className="hover:text-[#D4AF37]">Contact</a></li>
-            <li>
+            <li key="home"><a href="#hero" className="hover:text-[#D4AF37]">Home</a></li>
+            <li key="sweets"><a href="#products" className="hover:text-[#D4AF37]">Sweets</a></li>
+            <li key="reviews"><a href="#reviews" className="hover:text-[#D4AF37]">Reviews</a></li>
+            <li key="contact"><a href="#contact" className="hover:text-[#D4AF37]">Contact</a></li>
+            <li key="admin">
               <Link to="/admin/login" className="hover:text-[#D4AF37]" data-testid="footer-admin-link">
                 Admin
               </Link>
@@ -37,9 +37,10 @@ export const Footer = () => {
         <div>
           <h4 className="font-serif text-2xl mb-3">Reach Us</h4>
           <ul className="space-y-2 text-sm text-[#F5E6B8]/80">
-            <li>1-1-27, beside R9000,<br/>Malkajgiri X Road, Hyderabad 500047</li>
-            <li>+91 95337 26951</li>
-            <li>sweetnestmalkajgiri@gmail.com</li>
+            <li key="address">1-1-27, beside R9000,<br />Malkajgiri X Road, Hyderabad 500047</li>
+            <li key="phone1">+91 95337 26951</li>
+            <li key="phone2">+91 91005 45087</li>
+            <li key="email">sweetnestmalkajgiri@gmail.com</li>
           </ul>
         </div>
       </div>
